@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Powered Music Composition System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #0d1117;
+    color: white;
+    overflow-x: hidden;
+  }
+
+  /* Network Background */
+  #network-background {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: -2;
+    filter: blur(0.4px);
+    opacity: 0.6;
+  }
+
+  .network-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(10, 1fr);
+    width: 150%;
+    height: 150%;
+    position: absolute;
+    top: -25%; left: -25%;
+    animation: network-float 45s infinite linear;
+  }
+
+  @keyframes network-float {
+    0% { transform: translate(0, 0); }
+    50% { transform: translate(-15%, -15%); }
+    100% { transform: translate(0, 0); }
+  }
+
+  .network-node {
+    width: 4px; height: 4px;
+    background: #22d3ee;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #22d3ee, 0 0 5px #22d3ee;
+    opacity: 0.8;
+    animation: node-pulse 3s infinite alternate ease-in-out;
+  }
+
+  @keyframes node-pulse {
+    0% { opacity: 0.5; transform: scale(1); }
+    100% { opacity: 1; transform: scale(1.4); }
+  }
+
+  /* Navbar */
+  nav a { transition: color 0.3s; }
+
+  /* Fixed Typing Animation */
+  .typing-container {
+    display: inline-block;
+    text-align: center;
+    position: relative;
+  }
+
+  .typing {
+    display: inline-block;
+    border-right: .15em solid #22d3ee;
+    white-space: nowrap;
+    overflow: hidden;
+    animation: typing 4s steps(42, end) forwards, blink 0.75s step-end infinite;
+  }
+
+  @keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+
+  @keyframes blink {
+    50% { border-color: transparent; }
+  }
+
+  /* Hide cursor after typing finishes */
+  .typing.finished {
+    border-right: none;
+  }
+
+  /* Feature Cards */
+  .feature-card {
+    background: linear-gradient(145deg, #141a24, #1c252f);
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    border-radius: 1rem;
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .feature-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 0 30px rgba(34, 211, 238, 0.7);
+  }
+
+  .feature-card img {
+    animation: neon-pulse 2s ease-in-out infinite;
+    filter: drop-shadow(0 0 4px #22d3ee);
+  }
+  @keyframes neon-pulse {
+    0%, 100% { filter: drop-shadow(0 0 4px #22d3ee); }
+    50% { filter: drop-shadow(0 0 12px #22d3ee); }
+  }
+</style>
+</head>
+
+<body>
+
+<!-- Navbar -->
+<nav class="fixed top-0 left-0 w-full bg-gray-900/90 backdrop-blur-md z-50 shadow-md">
+  <div class="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
+    <a href="/" class="text-cyan-400 font-bold text-xl">Whispers of the Wires</a>
+    <div class="hidden md:flex space-x-4 items-center">
+      <a href="/" class="text-gray-300 hover:text-cyan-400 font-medium">Home</a>
+      <a href="/compose" id="compose-link" class="text-gray-300 hover:text-cyan-400 font-medium">Compose</a>
+      <a href="/library" id="library-link" class="text-gray-300 hover:text-cyan-400 font-medium">Library</a>
+      <a href="/playlist" id="playlist-link" class="text-gray-300 hover:text-cyan-400 font-medium transition">Playlist</a>
+
+      <span id="user-name" class="text-gray-200"></span>
+      <button id="login-btn" onclick="signInWithGoogle()" class="px-4 py-2 bg-cyan-400 text-gray-900 rounded hover:bg-cyan-500">Sign in with Google</button>
+      <button id="logout-btn" onclick="signOut()" class="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 hidden">Sign Out</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Background -->
+<div id="network-background"><div class="network-grid"></div></div>
+
+<!-- Hero Section -->
+<section class="text-center relative z-10 p-6 mt-24">
+  <h1 class="text-4xl md:text-6xl font-extrabold mb-4">
+    <span class="typing-container">
+      <span class="typing" id="typing-text">AI Powered Music Composition System</span>
+    </span>
+  </h1>
+  <p class="text-gray-400 mb-8 text-lg md:text-xl">
+    Compose unique AI-generated tracks in seconds
+  </p>
+
+  <a href="/compose" id="start-btn" class="px-8 py-4 text-lg font-semibold text-gray-900 bg-cyan-400 hover:bg-cyan-500 rounded-xl shadow-lg transition">
+    Start Composing
+  </a>
+
+  <!-- Feature Cards -->
+  <div class="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+    <div class="feature-card p-6 text-center">
+      <img src="https://cdn-icons-png.flaticon.com/512/727/727245.png" class="w-16 h-16 mx-auto mb-4" />
+      <h3 class="text-xl font-semibold mb-2">AI Generated Music</h3>
+      <p class="text-gray-400">Instantly create original tracks using advanced neural networks.</p>
+    </div>
+    <div class="feature-card p-6 text-center">
+      <img src="https://cdn-icons-png.flaticon.com/512/727/727240.png" class="w-16 h-16 mx-auto mb-4" />
+      <h3 class="text-xl font-semibold mb-2">Mood-based Composition</h3>
+      <p class="text-gray-400">Select a mood and let AI blend instruments and tempo beautifully.</p>
+    </div>
+    <div class="feature-card p-6 text-center">
+      <img src="https://cdn-icons-png.flaticon.com/512/727/727233.png" class="w-16 h-16 mx-auto mb-4" />
+      <h3 class="text-xl font-semibold mb-2">Track Library</h3>
+      <p class="text-gray-400">Save and explore your generated masterpieces anytime.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="text-center py-6 text-gray-500 border-t border-gray-800">
+  © 2025 Whispers of the Wires
+</footer>
+
+<!-- Firebase Auth Logic -->
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAHTITskRUK1EUtRLmTkzWr8WO9wOf9pEA",
+    authDomain: "ai-music-composer-5eb89.firebaseapp.com",
+    projectId: "ai-music-composer-5eb89",
+    storageBucket: "ai-music-composer-5eb89.firebasestorage.app",
+    messagingSenderId: "459852139401",
+    appId: "1:459852139401:web:8b94e91ba548eab0612f58",
+    measurementId: "G-F6NL9WGY9B"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+
+  function signInWithGoogle() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider);
+  }
+  function signOut() { auth.signOut(); }
+
+  auth.onAuthStateChanged(user => {
+    const loginBtn = document.getElementById("login-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const username = document.getElementById("user-name");
+    loginBtn.style.display = user ? "none" : "inline-block";
+    logoutBtn.style.display = user ? "inline-block" : "none";
+    username.textContent = user ? user.displayName : "";
+
+    const links = [
+      { id: "compose-link", name: "Compose" },
+      { id: "library-link", name: "Library" },
+      { id: "start-btn", name: "Start Composing" },
+      { id: "playlist-link", name: "Playlist" }
+    ];
+    links.forEach(item => {
+      const el = document.getElementById(item.id);
+      el.onclick = (e) => {
+        if (!user) {
+          e.preventDefault();
+          alert(`${item.name} requires SignUp!`);
+        }
+      };
+    });
+  });
+
+  // Stop cursor blink after typing
+  setTimeout(() => {
+    document.getElementById("typing-text").classList.add("finished");
+  }, 4200);
+
+  // Background network
+  const grid = document.querySelector('.network-grid');
+  for (let i = 0; i < 100; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'flex justify-center items-center';
+    const node = document.createElement('div');
+    node.className = 'network-node';
+    cell.appendChild(node);
+    grid.appendChild(cell);
+  }
+</script>
+</body>
+</html>

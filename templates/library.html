@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Music Library - AI Composer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
+
+    body {
+      font-family: "Inter", sans-serif;
+      background-color: #0d1117;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    #network-background {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      filter: blur(0.5px);
+      opacity: 0.7;
+    }
+
+    .network-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: repeat(10, 1fr);
+      width: 150%;
+      height: 150%;
+      position: absolute;
+      top: -25%;
+      left: -25%;
+      animation: network-float 45s infinite linear;
+    }
+
+    @keyframes network-float {
+      0% { transform: translate(0, 0); }
+      50% { transform: translate(-15%, -15%); }
+      100% { transform: translate(0, 0); }
+    }
+
+    .network-node {
+      width: 4px;
+      height: 4px;
+      background-color: #22d3ee;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #22d3ee, 0 0 5px #22d3ee;
+      opacity: 0.8;
+      animation: node-pulse 3s infinite alternate ease-in-out;
+    }
+
+    @keyframes node-pulse {
+      0% { opacity: 0.6; transform: scale(1); }
+      100% { opacity: 1; transform: scale(1.5); }
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background-color: #22d3ee;
+      color: #0d1117;
+      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: 10px;
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+      z-index: 9999;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="fixed top-0 left-0 w-full bg-gray-900/90 backdrop-blur-md z-50 shadow-md">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="/" class="text-cyan-400 font-bold text-xl">Whispers of the Wires</a>
+        <div class="hidden md:flex space-x-6">
+          <a href="/" class="text-gray-300 hover:text-cyan-400 font-medium transition">Home</a>
+          <a href="/compose" class="text-gray-300 hover:text-cyan-400 font-medium transition">Compose</a>
+          <a href="/library" class="text-gray-300 hover:text-cyan-400 font-medium transition">Library</a>
+          <a href="/playlist" class="text-gray-300 hover:text-cyan-400 font-medium transition">Playlist</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Animated Background -->
+  <div id="network-background">
+    <div class="network-grid"></div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="relative z-10 max-w-6xl mx-auto p-6 mt-24">
+    <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-8 text-center">
+      Your Music Library
+    </h1>
+
+    <div id="library-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Cards injected here -->
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast"></div>
+
+  <script>
+  // Generate background nodes
+  const grid = document.querySelector(".network-grid");
+  for (let i = 0; i < 100; i++) {
+    const cell = document.createElement("div");
+    cell.className = "flex justify-center items-center";
+    const node = document.createElement("div");
+    node.className = "network-node";
+    cell.appendChild(node);
+    grid.appendChild(cell);
+  }
+
+  // Library management
+  const libraryContainer = document.getElementById("library-container");
+  let tracks = JSON.parse(localStorage.getItem("aiTracks") || "[]");
+
+  function showToast(msg, success = true) {
+    const toast = document.getElementById("toast");
+    toast.textContent = msg;
+    toast.style.backgroundColor = success ? "#22d3ee" : "#ef4444";
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 2000);
+  }
+
+  function renderLibrary() {
+    libraryContainer.innerHTML = "";
+    if (tracks.length === 0) {
+      libraryContainer.innerHTML =
+        '<p class="text-gray-400 text-center col-span-full">No tracks yet. Start composing!</p>';
+      return;
+    }
+
+    tracks.slice().reverse().forEach((track, index) => {
+      const card = document.createElement("div");
+      card.className =
+        "bg-gray-800/90 backdrop-blur-sm p-4 rounded-2xl shadow-lg border border-gray-700/50 flex flex-col justify-between";
+
+      const audioId = `audio_${index}`;
+      const durationId = `duration_${index}`;
+
+      // --- FIXED: Use base64 audio data ---
+      const audioSrc = `data:audio/wav;base64,${track.audio_base64}`;
+
+      card.innerHTML = `
+        <h2 class="text-xl font-bold text-white mb-2">${track.genre?.toUpperCase() || "Unknown"}</h2>
+        <p class="text-gray-300 text-sm mb-2">${track.description || "Untitled Composition"}</p>
+        <p id="${durationId}" class="text-gray-400 text-xs mb-4">Duration: Loading...</p>
+        <audio id="${audioId}" controls preload="metadata" class="w-full rounded-lg mb-3" src="${audioSrc}"></audio>
+        <div class="flex justify-between items-center">
+          <a href="${audioSrc}" download="ai_composition_${track.id}.wav"
+            class="text-center flex-1 mr-2 p-2 bg-cyan-400 hover:bg-cyan-500 text-gray-900 rounded-lg font-semibold transition">Download</a>
+          <button onclick="deleteTrack(${index})"
+            class="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition">Delete</button>
+        </div>
+      `;
+
+      libraryContainer.appendChild(card);
+
+      // Wait for metadata to load before showing duration
+      const audio = card.querySelector(`#${audioId}`);
+      const durationText = card.querySelector(`#${durationId}`);
+      audio.addEventListener("loadedmetadata", () => {
+        const seconds = Math.floor(audio.duration);
+        const minutes = Math.floor(seconds / 60);
+        const remaining = seconds % 60;
+        durationText.textContent =
+          `Duration: ${minutes > 0 ? minutes + "m " : ""}${remaining}s`;
+      });
+    });
+  }
+
+  function deleteTrack(index) {
+    const realIndex = tracks.length - 1 - index; // reverse index
+    tracks.splice(realIndex, 1);
+    localStorage.setItem("aiTracks", JSON.stringify(tracks));
+    renderLibrary();
+    showToast("Track deleted successfully ✅");
+  }
+
+  renderLibrary();
+  </script>
+</body>
+</html>

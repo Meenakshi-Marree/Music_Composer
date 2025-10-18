@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Playlists - AI Composer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
+    body {
+      font-family: "Inter", sans-serif;
+      background-color: #0d1117;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    #network-background {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      filter: blur(0.5px);
+      opacity: 0.7;
+    }
+    .network-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: repeat(10, 1fr);
+      width: 150%;
+      height: 150%;
+      position: absolute;
+      top: -25%;
+      left: -25%;
+      animation: network-float 45s infinite linear;
+    }
+    @keyframes network-float {
+      0% { transform: translate(0, 0); }
+      50% { transform: translate(-15%, -15%); }
+      100% { transform: translate(0, 0); }
+    }
+    .network-node {
+      width: 4px;
+      height: 4px;
+      background-color: #22d3ee;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #22d3ee, 0 0 5px #22d3ee;
+      opacity: 0.8;
+      animation: node-pulse 3s infinite alternate ease-in-out;
+    }
+    @keyframes node-pulse {
+      0% { opacity: 0.6; transform: scale(1); }
+      100% { opacity: 1; transform: scale(1.5); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="fixed top-0 left-0 w-full bg-gray-900/90 backdrop-blur-md z-50 shadow-md">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="/" class="text-cyan-400 font-bold text-xl">Whispers of the Wires</a>
+        <div class="hidden md:flex space-x-6">
+          <a href="/" class="text-gray-300 hover:text-cyan-400 font-medium transition">Home</a>
+          <a href="/compose" class="text-gray-300 hover:text-cyan-400 font-medium transition">Compose</a>
+          <a href="/library" class="text-gray-300 hover:text-cyan-400 font-medium transition">Library</a>
+          <a href="/playlist" class="text-gray-300 hover:text-cyan-400 font-medium transition">Playlist</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Animated Background -->
+  <div id="network-background"><div class="network-grid"></div></div>
+
+  <!-- Main Content -->
+  <div class="relative z-10 max-w-6xl mx-auto p-6 mt-24">
+    <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-8 text-center">Your Playlists</h1>
+    <p class="text-gray-400 mb-10 text-center text-lg">Organize your AI-composed tracks by mood or genre.</p>
+
+    <div id="playlist-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+
+    <div id="playlist-view" class="hidden mt-10">
+      <button id="back-btn" class="px-4 py-2 mb-6 bg-cyan-400 hover:bg-cyan-500 text-gray-900 rounded-lg font-semibold">← Back to All Playlists</button>
+      <h2 id="playlist-title" class="text-3xl text-white mb-4"></h2>
+      <div id="songs-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </div>
+  </div>
+
+  <script>
+    // Animated Background Nodes
+    const grid = document.querySelector(".network-grid");
+    for (let i = 0; i < 100; i++) {
+      const cell = document.createElement("div");
+      cell.className = "flex justify-center items-center";
+      const node = document.createElement("div");
+      node.className = "network-node";
+      cell.appendChild(node);
+      grid.appendChild(cell);
+    }
+
+    // Playlist logic
+    const tracks = JSON.parse(localStorage.getItem("aiTracks") || "[]");
+    const grouped = {};
+    tracks.forEach(track => {
+      if (!grouped[track.genre]) grouped[track.genre] = [];
+      grouped[track.genre].push(track);
+    });
+
+    const playlistContainer = document.getElementById("playlist-container");
+    const playlistView = document.getElementById("playlist-view");
+    const songsContainer = document.getElementById("songs-container");
+    const playlistTitle = document.getElementById("playlist-title");
+    const backBtn = document.getElementById("back-btn");
+
+    function renderPlaylists() {
+      playlistContainer.innerHTML = "";
+      if (Object.keys(grouped).length === 0) {
+        playlistContainer.innerHTML = '<p class="text-gray-400 text-center col-span-full">No playlists yet. Compose some songs first!</p>';
+        return;
+      }
+      for (const genre in grouped) {
+        const card = document.createElement("div");
+        card.className = "bg-gray-800/90 p-6 rounded-2xl shadow-lg border border-gray-700/50 text-center hover:shadow-cyan-500/20 transition";
+        card.innerHTML = `
+          <h2 class="text-2xl font-bold text-white mb-2">${genre.toUpperCase()}</h2>
+          <p class="text-gray-400 mb-4">${grouped[genre].length} Track(s)</p>
+          <button onclick="viewPlaylist('${genre}')" class="px-4 py-2 bg-cyan-400 hover:bg-cyan-500 text-gray-900 rounded-lg font-semibold">View Playlist</button>
+        `;
+        playlistContainer.appendChild(card);
+      }
+    }
+
+    window.viewPlaylist = function(genre) {
+      playlistContainer.classList.add("hidden");
+      playlistView.classList.remove("hidden");
+      playlistTitle.textContent = genre.toUpperCase() + " Playlist";
+      songsContainer.innerHTML = "";
+
+      grouped[genre].forEach(track => {
+        const card = document.createElement("div");
+        card.className = "bg-gray-800/90 p-4 rounded-xl border border-gray-700/50 shadow-md";
+        card.innerHTML = `
+          <p class="text-gray-300 mb-2">${track.description || "Untitled Composition"}</p>
+          <p class="text-gray-400 text-xs mb-2">Duration: ${track.duration || "Unknown"}s</p>
+          <audio controls src="${track.audio_path}" class="w-full rounded-lg"></audio>
+        `;
+        songsContainer.appendChild(card);
+      });
+    }
+
+    backBtn.onclick = () => {
+      playlistView.classList.add("hidden");
+      playlistContainer.classList.remove("hidden");
+    };
+
+    renderPlaylists();
+  </script>
+</body>
+</html>

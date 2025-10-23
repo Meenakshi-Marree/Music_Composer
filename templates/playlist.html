@@ -55,7 +55,6 @@
   </style>
 </head>
 <body>
-  <!-- Navbar -->
   <nav class="fixed top-0 left-0 w-full bg-gray-900/90 backdrop-blur-md z-50 shadow-md">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
@@ -70,15 +69,17 @@
     </div>
   </nav>
 
-  <!-- Animated Background -->
   <div id="network-background"><div class="network-grid"></div></div>
 
-  <!-- Main Content -->
   <div class="relative z-10 max-w-6xl mx-auto p-6 mt-24">
     <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-8 text-center">Your Playlists</h1>
     <p class="text-gray-400 mb-10 text-center text-lg">Organize your AI-composed tracks by mood or genre.</p>
 
-    <div id="playlist-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    <div id="loading-message" class="text-center text-gray-400 mb-6">
+      <p>Loading playlists...</p>
+    </div>
+
+    <div id="playlist-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 hidden"></div>
 
     <div id="playlist-view" class="hidden mt-10">
       <button id="back-btn" class="px-4 py-2 mb-6 bg-cyan-400 hover:bg-cyan-500 text-gray-900 rounded-lg font-semibold">← Back to All Playlists</button>
@@ -88,6 +89,47 @@
   </div>
 
   <script>
+    // IndexedDB Helper
+    class MusicDB {
+        constructor() {
+            this.dbName = 'AIComposerDB';
+            this.version = 1;
+            this.db = null;
+        }
+
+        async init() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(this.dbName, this.version);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    this.db = request.result;
+                    resolve(this.db);
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('tracks')) {
+                        const objectStore = db.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
+                        objectStore.createIndex('genre', 'genre', { unique: false });
+                        objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    }
+                };
+            });
+        }
+
+        async getAllTracks() {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction(['tracks'], 'readonly');
+                const objectStore = transaction.objectStore('tracks');
+                const request = objectStore.getAll();
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+    }
+
     // Animated Background Nodes
     const grid = document.querySelector(".network-grid");
     for (let i = 0; i < 100; i++) {
@@ -99,19 +141,37 @@
       grid.appendChild(cell);
     }
 
-    // Playlist logic
-    const tracks = JSON.parse(localStorage.getItem("aiTracks") || "[]");
-    const grouped = {};
-    tracks.forEach(track => {
-      if (!grouped[track.genre]) grouped[track.genre] = [];
-      grouped[track.genre].push(track);
-    });
-
+    const musicDB = new MusicDB();
     const playlistContainer = document.getElementById("playlist-container");
     const playlistView = document.getElementById("playlist-view");
     const songsContainer = document.getElementById("songs-container");
     const playlistTitle = document.getElementById("playlist-title");
     const backBtn = document.getElementById("back-btn");
+    const loadingMessage = document.getElementById("loading-message");
+
+    let allTracks = [];
+    let grouped = {};
+
+    async function loadTracks() {
+      try {
+        await musicDB.init();
+        allTracks = await musicDB.getAllTracks();
+        
+        // Group by genre
+        grouped = {};
+        allTracks.forEach(track => {
+          if (!grouped[track.genre]) grouped[track.genre] = [];
+          grouped[track.genre].push(track);
+        });
+        
+        loadingMessage.classList.add('hidden');
+        playlistContainer.classList.remove('hidden');
+        renderPlaylists();
+      } catch (error) {
+        console.error('Error loading tracks:', error);
+        loadingMessage.innerHTML = '<p class="text-red-400">Error loading playlists. Please refresh the page.</p>';
+      }
+    }
 
     function renderPlaylists() {
       playlistContainer.innerHTML = "";
@@ -121,7 +181,7 @@
       }
       for (const genre in grouped) {
         const card = document.createElement("div");
-        card.className = "bg-gray-800/90 p-6 rounded-2xl shadow-lg border border-gray-700/50 text-center hover:shadow-cyan-500/20 transition";
+        card.className = "bg-gray-800/90 p-6 rounded-2xl shadow-lg border border-gray-700/50 text-center hover:shadow-cyan-500/20 transition cursor-pointer transform hover:scale-105";
         card.innerHTML = `
           <h2 class="text-2xl font-bold text-white mb-2">${genre.toUpperCase()}</h2>
           <p class="text-gray-400 mb-4">${grouped[genre].length} Track(s)</p>
@@ -137,14 +197,31 @@
       playlistTitle.textContent = genre.toUpperCase() + " Playlist";
       songsContainer.innerHTML = "";
 
-      grouped[genre].forEach(track => {
+      grouped[genre].forEach((track, index) => {
         const card = document.createElement("div");
-        card.className = "bg-gray-800/90 p-4 rounded-xl border border-gray-700/50 shadow-md";
-        card.innerHTML = `
-          <p class="text-gray-300 mb-2">${track.description || "Untitled Composition"}</p>
-          <p class="text-gray-400 text-xs mb-2">Duration: ${track.duration || "Unknown"}s</p>
-          <audio controls src="${track.audio_path}" class="w-full rounded-lg"></audio>
-        `;
+        card.className = "bg-gray-800/90 p-4 rounded-xl border border-gray-700/50 shadow-md hover:shadow-cyan-500/10 transition";
+        
+        // Create object URL from Blob
+        const audioSrc = URL.createObjectURL(track.audioBlob);
+        
+        const titleEl = document.createElement("p");
+        titleEl.className = "text-gray-300 mb-2 font-medium";
+        titleEl.textContent = track.description || `Untitled Composition #${index + 1}`;
+        
+        const durationEl = document.createElement("p");
+        durationEl.className = "text-gray-400 text-xs mb-2";
+        durationEl.textContent = `Duration: ${track.duration}s`;
+        
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.src = audioSrc;
+        audio.className = "w-full rounded-lg";
+        audio.preload = "metadata";
+        
+        card.appendChild(titleEl);
+        card.appendChild(durationEl);
+        card.appendChild(audio);
+        
         songsContainer.appendChild(card);
       });
     }
@@ -154,7 +231,8 @@
       playlistContainer.classList.remove("hidden");
     };
 
-    renderPlaylists();
+    // Initialize
+    loadTracks();
   </script>
 </body>
 </html>

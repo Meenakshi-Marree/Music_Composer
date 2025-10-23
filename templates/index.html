@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Whispers of the Wires - AI Music Composer</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
@@ -16,7 +15,6 @@
             position: relative;
         }
 
-        /* Network Background */
         #network-background {
             position: fixed;
             top: 0;
@@ -61,10 +59,6 @@
             100% { opacity: 1; transform: scale(1.5); }
         }
 
-        .network-grid > div:nth-child(3n) .network-node { animation-delay: 0.5s; }
-        .network-grid > div:nth-child(5n) .network-node { animation-delay: 1.2s; }
-
-        /* Loading Bars */
         .loading-bar {
             background-color: #22d3ee;
             animation: pulse-height 1.5s infinite ease-in-out;
@@ -80,7 +74,6 @@
             50% { transform: scaleY(1); opacity: 1; }
         }
 
-        /* Wave Bars */
         .wave-bar {
             width: 2px;
             height: 4px;
@@ -90,7 +83,6 @@
             transition: height 0.1s ease-out;
         }
 
-        /* Rating Stars */
         .rating-star {
             cursor: pointer;
             transition: color 0.2s;
@@ -102,7 +94,6 @@
             color: #fcd34d;
         }
 
-        /* Gradient Button */
         #generate-btn {
             background-image: linear-gradient(to right, #14b8a6, #22d3ee);
             transition: transform 0.1s, box-shadow 0.2s;
@@ -121,7 +112,6 @@
 </head>
 <body class="min-h-screen flex flex-col items-center p-4 pt-8 pb-16">
 
-    <!-- Navbar -->
     <nav class="fixed top-0 left-0 w-full bg-gray-900/90 backdrop-blur-md z-50 shadow-md">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
@@ -138,18 +128,13 @@
         </div>
     </nav>
 
-    <!-- Wrapper -->
     <div class="pt-24 w-full flex flex-col items-center">
-
-        <!-- Animated Background -->
         <div id="network-background">
             <div class="network-grid"></div>
         </div>
 
-        <!-- Main App Card -->
         <div class="w-full max-w-3xl bg-gray-800/90 backdrop-blur-sm p-8 rounded-2xl shadow-2xl transition-all duration-300 border border-gray-700/50 relative z-10">
             
-            <!-- Header -->
             <header class="text-center mb-6">
                 <h1 class="text-3xl font-extrabold text-white mb-2">
                     <span class="text-cyan-400">AI</span> Music Composer
@@ -157,10 +142,8 @@
                 <p class="text-gray-400 text-sm">Whisper of the Wires - Generate tracks up to 15 seconds.</p>
             </header>
 
-            <!-- Form -->
             <form id="music-form">
                 <div class="space-y-6">
-                    <!-- Genre Dropdown -->
                     <div>
                         <label for="genre" class="block text-sm font-medium text-gray-300 mb-2">Select Primary Genre</label>
                         <select id="genre" class="w-full p-3 bg-gray-700/70 text-white rounded-lg border border-gray-600 focus:ring-cyan-500 focus:border-cyan-500 transition duration-150">
@@ -177,7 +160,6 @@
                         </select>
                     </div>
 
-                    <!-- Description Input -->
                     <div>
                         <label for="prompt" class="block text-sm font-medium text-gray-300 mb-2">Music Description (Mood, Instruments, Tempo)</label>
                         <div class="relative">
@@ -192,7 +174,6 @@
                         </div>
                     </div>
 
-                    <!-- Duration -->
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <label for="duration" class="text-sm font-medium text-gray-300 w-full sm:w-auto">Track Duration (Seconds):</label>
                         <div class="flex items-center space-x-3 w-full sm:w-1/2">
@@ -202,7 +183,6 @@
                         </div>
                     </div>
 
-                    <!-- Inspire Me Button -->
                     <div class="flex justify-end items-center">
                         <button type="button" id="inspire-btn" 
                                 class="text-sm font-semibold px-4 py-2 bg-gray-700/50 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition duration-200">
@@ -210,12 +190,10 @@
                         </button>
                     </div>
 
-                    <!-- Status -->
                     <div class="mt-6 h-10 flex items-center justify-center">
                         <p id="status-message" class="text-sm font-medium text-cyan-400/80 hidden">Waiting for input...</p>
                     </div>
                     
-                    <!-- Loading Animation -->
                     <div id="loading-animation" class="hidden flex items-end justify-center h-16 space-x-2">
                         <div class="loading-bar w-2 h-4"></div>
                         <div class="loading-bar w-2 h-6"></div>
@@ -231,7 +209,6 @@
                 </button>
             </form>
 
-            <!-- Results -->
             <div id="results-section" class="mt-10 pt-6 border-t border-gray-700 space-y-6 hidden">
                 <h2 class="text-2xl font-bold text-white text-center">New Track Generated</h2>
 
@@ -249,7 +226,6 @@
                     </a>
                 </div>
 
-                <!-- Rating -->
                 <div id="feedback-section" class="pt-6 border-t border-gray-700 text-center space-y-4">
                     <h3 class="text-xl font-bold text-white">Rate the Composition</h3>
                     <p class="text-gray-400 text-sm">Your rating is for display and testing only.</p>
@@ -260,8 +236,48 @@
         </div>
     </div>
 
-    <!-- JavaScript -->
     <script>
+    // IndexedDB Helper Class
+    class MusicDB {
+        constructor() {
+            this.dbName = 'AIComposerDB';
+            this.version = 1;
+            this.db = null;
+        }
+
+        async init() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(this.dbName, this.version);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    this.db = request.result;
+                    resolve(this.db);
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('tracks')) {
+                        const objectStore = db.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
+                        objectStore.createIndex('genre', 'genre', { unique: false });
+                        objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    }
+                };
+            });
+        }
+
+        async addTrack(track) {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction(['tracks'], 'readwrite');
+                const objectStore = transaction.objectStore('tracks');
+                const request = objectStore.add(track);
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', async () => {
         const form = document.getElementById('music-form');
         const genreInput = document.getElementById('genre'); 
@@ -284,6 +300,10 @@
         let currentRating = 0;
         const API_URL = 'http://127.0.0.1:5000/generate-music';
 
+        // Initialize IndexedDB
+        const musicDB = new MusicDB();
+        await musicDB.init();
+
         const randomPrompts = [
             { genre: "rock", description: "a heavy guitar riff with a four-on-the-floor drum beat and driving bass." },
             { genre: "metal", description: "a high-gain metal riff with distorted guitars, double kick drums, and a powerful breakdown." },
@@ -295,7 +315,6 @@
             { genre: "reggae", description: "a relaxed, off-beat guitar chop with a deep bass line and slow, steady drums." }
         ];
 
-        // --- NETWORK GRID NODES ---
         const grid = document.querySelector('.network-grid');
         for (let i = 0; i < 100; i++) {
             const cell = document.createElement('div');
@@ -306,10 +325,8 @@
             grid.appendChild(cell);
         }
 
-        // --- DURATION SLIDER DISPLAY ---
         durationInput.addEventListener('input', () => durationValue.textContent = durationInput.value);
 
-        // --- WAVE BARS ---
         const NUM_WAVE_BARS = 100;
         for (let i = 0; i < NUM_WAVE_BARS; i++) {
             const bar = document.createElement('div');
@@ -328,7 +345,6 @@
         };
         const stopWaveAnimation = () => { clearInterval(waveInterval); };
 
-        // --- RATING STARS ---
         const NUM_STARS = 5;
         for (let i = 0; i < NUM_STARS; i++) {
             const star = document.createElement('span');
@@ -347,7 +363,6 @@
             ratingConfirmation.textContent = `You rated this track ${rating}/5 ⭐`;
         };
 
-        // --- INSPIRE ME BUTTON ---
         inspireBtn.addEventListener('click', (e) => {
             e.preventDefault();
             const random = randomPrompts[Math.floor(Math.random() * randomPrompts.length)];
@@ -359,7 +374,6 @@
             statusMessage.classList.add('text-cyan-400');
         });
 
-        // --- COPY PROMPT ---
         copyPromptBtn.addEventListener('click', () => {
             const fullPrompt = `${genreInput.value}, ${promptInput.value.trim()}`;
             navigator.clipboard.writeText(fullPrompt)
@@ -370,13 +384,11 @@
                 });
         });
 
-        // --- FORM SUBMIT ---
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             await generateMusic();
         });
 
-        // --- GENERATE MUSIC FUNCTION ---
         async function generateMusic() {
             generateBtn.disabled = true;
             resultsSection.classList.add('hidden');
@@ -402,7 +414,6 @@
 
                 if (data.status !== "success") throw new Error(data.error || "Generation failed");
 
-                // --- FIXED: Correct Base64 for audio playback & download ---
                 const audioURL = `data:${data.mime_type};base64,${data.audio_base64}`;
 
                 audioPlayer.src = audioURL;
@@ -411,17 +422,26 @@
 
                 startWaveAnimation();
 
-                // --- SAVE TRACK TO LOCALSTORAGE FOR LIBRARY ---
+                // Convert base64 to Blob for IndexedDB storage
+                const byteCharacters = atob(data.audio_base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const audioBlob = new Blob([byteArray], { type: data.mime_type });
+
+                // Save to IndexedDB
                 const track = {
-                    id: Date.now(),
                     genre: genreInput.value,
                     description: promptInput.value,
                     duration: parseInt(durationInput.value),
-                    audio_base64: data.audio_base64 // <-- FIXED FIELD NAME
+                    audioBlob: audioBlob,
+                    timestamp: Date.now()
                 };
-                let savedTracks = JSON.parse(localStorage.getItem('aiTracks') || '[]');
-                savedTracks.push(track);
-                localStorage.setItem('aiTracks', JSON.stringify(savedTracks));
+                
+                await musicDB.addTrack(track);
+                statusMessage.textContent = 'Track saved successfully! ✅';
 
             } catch (err) {
                 console.error(err);

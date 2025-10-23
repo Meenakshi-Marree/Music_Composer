@@ -76,7 +76,6 @@
   </style>
 </head>
 <body>
-  <!-- Navbar -->
   <nav class="fixed top-0 left-0 w-full bg-gray-900/90 backdrop-blur-md z-50 shadow-md">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
@@ -91,26 +90,75 @@
     </div>
   </nav>
 
-  <!-- Animated Background -->
   <div id="network-background">
     <div class="network-grid"></div>
   </div>
 
-  <!-- Main Content -->
   <div class="relative z-10 max-w-6xl mx-auto p-6 mt-24">
     <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-8 text-center">
       Your Music Library
     </h1>
 
     <div id="library-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      <!-- Cards injected here -->
+      <p class="text-gray-400 text-center col-span-full">Loading tracks...</p>
     </div>
   </div>
 
-  <!-- Toast Notification -->
   <div id="toast"></div>
 
   <script>
+  // IndexedDB Helper
+  class MusicDB {
+      constructor() {
+          this.dbName = 'AIComposerDB';
+          this.version = 1;
+          this.db = null;
+      }
+
+      async init() {
+          return new Promise((resolve, reject) => {
+              const request = indexedDB.open(this.dbName, this.version);
+              
+              request.onerror = () => reject(request.error);
+              request.onsuccess = () => {
+                  this.db = request.result;
+                  resolve(this.db);
+              };
+              
+              request.onupgradeneeded = (event) => {
+                  const db = event.target.result;
+                  if (!db.objectStoreNames.contains('tracks')) {
+                      const objectStore = db.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
+                      objectStore.createIndex('genre', 'genre', { unique: false });
+                      objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+                  }
+              };
+          });
+      }
+
+      async getAllTracks() {
+          return new Promise((resolve, reject) => {
+              const transaction = this.db.transaction(['tracks'], 'readonly');
+              const objectStore = transaction.objectStore('tracks');
+              const request = objectStore.getAll();
+              
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+          });
+      }
+
+      async deleteTrack(id) {
+          return new Promise((resolve, reject) => {
+              const transaction = this.db.transaction(['tracks'], 'readwrite');
+              const objectStore = transaction.objectStore('tracks');
+              const request = objectStore.delete(id);
+              
+              request.onsuccess = () => resolve();
+              request.onerror = () => reject(request.error);
+          });
+      }
+  }
+
   // Generate background nodes
   const grid = document.querySelector(".network-grid");
   for (let i = 0; i < 100; i++) {
@@ -122,9 +170,9 @@
     grid.appendChild(cell);
   }
 
-  // Library management
   const libraryContainer = document.getElementById("library-container");
-  let tracks = JSON.parse(localStorage.getItem("aiTracks") || "[]");
+  const musicDB = new MusicDB();
+  let tracks = [];
 
   function showToast(msg, success = true) {
     const toast = document.getElementById("toast");
@@ -134,8 +182,9 @@
     setTimeout(() => toast.classList.remove("show"), 2000);
   }
 
-  function renderLibrary() {
+  async function renderLibrary() {
     libraryContainer.innerHTML = "";
+    
     if (tracks.length === 0) {
       libraryContainer.innerHTML =
         '<p class="text-gray-400 text-center col-span-full">No tracks yet. Start composing!</p>';
@@ -150,46 +199,51 @@
       const audioId = `audio_${index}`;
       const durationId = `duration_${index}`;
 
-      // --- FIXED: Use base64 audio data ---
-      const audioSrc = `data:audio/wav;base64,${track.audio_base64}`;
+      // Create object URL from Blob
+      const audioSrc = URL.createObjectURL(track.audioBlob);
 
       card.innerHTML = `
         <h2 class="text-xl font-bold text-white mb-2">${track.genre?.toUpperCase() || "Unknown"}</h2>
         <p class="text-gray-300 text-sm mb-2">${track.description || "Untitled Composition"}</p>
-        <p id="${durationId}" class="text-gray-400 text-xs mb-4">Duration: Loading...</p>
+        <p id="${durationId}" class="text-gray-400 text-xs mb-4">Duration: ${track.duration}s</p>
         <audio id="${audioId}" controls preload="metadata" class="w-full rounded-lg mb-3" src="${audioSrc}"></audio>
         <div class="flex justify-between items-center">
           <a href="${audioSrc}" download="ai_composition_${track.id}.wav"
             class="text-center flex-1 mr-2 p-2 bg-cyan-400 hover:bg-cyan-500 text-gray-900 rounded-lg font-semibold transition">Download</a>
-          <button onclick="deleteTrack(${index})"
+          <button onclick="deleteTrack(${track.id})"
             class="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition">Delete</button>
         </div>
       `;
 
       libraryContainer.appendChild(card);
-
-      // Wait for metadata to load before showing duration
-      const audio = card.querySelector(`#${audioId}`);
-      const durationText = card.querySelector(`#${durationId}`);
-      audio.addEventListener("loadedmetadata", () => {
-        const seconds = Math.floor(audio.duration);
-        const minutes = Math.floor(seconds / 60);
-        const remaining = seconds % 60;
-        durationText.textContent =
-          `Duration: ${minutes > 0 ? minutes + "m " : ""}${remaining}s`;
-      });
     });
   }
 
-  function deleteTrack(index) {
-    const realIndex = tracks.length - 1 - index; // reverse index
-    tracks.splice(realIndex, 1);
-    localStorage.setItem("aiTracks", JSON.stringify(tracks));
-    renderLibrary();
-    showToast("Track deleted successfully ✅");
+  async function deleteTrack(id) {
+    try {
+      await musicDB.deleteTrack(id);
+      tracks = await musicDB.getAllTracks();
+      await renderLibrary();
+      showToast("Track deleted successfully ✅");
+    } catch (error) {
+      console.error('Error deleting track:', error);
+      showToast("Failed to delete track", false);
+    }
   }
 
-  renderLibrary();
+  window.deleteTrack = deleteTrack;
+
+  // Initialize
+  (async () => {
+    try {
+      await musicDB.init();
+      tracks = await musicDB.getAllTracks();
+      await renderLibrary();
+    } catch (error) {
+      console.error('Error loading library:', error);
+      libraryContainer.innerHTML = '<p class="text-red-400 text-center col-span-full">Error loading library. Please refresh.</p>';
+    }
+  })();
   </script>
 </body>
 </html>
